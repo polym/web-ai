@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-  
 import os
 import re
 import time
@@ -7,8 +8,7 @@ import requests
 import multiprocessing
 import logging.handlers
 
-now_time = time.strftime("%Y%m%d%H")
-print now_time
+now_time = time.strftime("%Y%m%d")
 
 fmt_str = '[%(levelname).4s %(asctime)s.%(msecs)03d pid:%(process)d] %(message)s'
 date_str = '%y-%m-%d %H:%M:%S'
@@ -59,6 +59,7 @@ class Robot:
         self.domain = domain
         self.username = username
         self.passwd = passwd
+        self.uid = ''
         self.Login()
 
     def _job(self, session, url, form):
@@ -83,8 +84,10 @@ class Robot:
             try:
                 p = self.session.get(self.domain + '/forum.php', timeout=1)
                 data = parseText(p)
-                res = re.match('.*name\=\"formhash\"\ value\=\"([^"]*)\".*', data, re.DOTALL)
+                res = re.match('.*name="formhash" value="([^"]*)".*uid=([0-9]*).*', \
+                        data, re.DOTALL)
                 self.hashval = res.group(1)
+                self.uid = res.group(2)
             except Exception as e:
                 retry = retry + 1
                 discuzlog.warning('stage=%s user=%s retry=%s' % \
@@ -138,7 +141,28 @@ class Robot:
 
         self.multiGet(url)
 
+    def DailyStat(self):
+        fname = '.%s-%s' % (self.username, now_time)
+        if os.path.exists(fname):
+            return
+        self.GetFormhash()
+        self.stage = 'DailyStat'
+        url = self.domain + '/home.php?mod=space&uid=%s&do=profile' % self.uid
+        print url
+        p = _get(self.session, url)
+        data = parseText(p)
+        res = re.match('.*在线时间</em>([0-9]*) 小时.*积分</em>'
+                       '([0-9]*)</li><li><em>精弘币</em>([0-9]*) 枚</li>', data, re.DOTALL)
+        discuzlog.info('stage=%s username=%s 在线时间=%s 积分=%s 精弘币=%s', self.stage, \
+                        self.username, res.group(1), res.group(2), res.group(3));
+        with open(fname, 'a'):
+            os.utime(fname, None)
+
 
 Robot('http://bbs.zjut.edu.cn', 'mhb','8888891d3ea5ec27c39033b69120a18f').QianDao()
 Robot('http://bbs.zjut.edu.cn', 'polym','8888891d3ea5ec27c39033b69120a18f').QianDao()
 Robot('http://bbs.zjut.edu.cn', 'QNMLGB','8888891d3ea5ec27c39033b69120a18f').QianDao()
+
+Robot('http://bbs.zjut.edu.cn', 'mhb','8888891d3ea5ec27c39033b69120a18f').DailyStat()
+Robot('http://bbs.zjut.edu.cn', 'polym','8888891d3ea5ec27c39033b69120a18f').DailyStat()
+Robot('http://bbs.zjut.edu.cn', 'QNMLGB','8888891d3ea5ec27c39033b69120a18f').DailyStat()
